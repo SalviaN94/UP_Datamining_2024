@@ -113,3 +113,80 @@ print(f"Ventas de {producto_interes} en los primeros meses:\n{ventas_resumidas}"
 for mes, cantidad in ventas_resumidas.items():
     print(f"En el mes {mes} se vendieron {cantidad} unidades de {producto_interes} ({categoria_interes}).")
 
+# Ignorar advertencias temporales de FutureWarning
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+# Gráfico de barras para ventas por mes
+plt.figure(figsize=(10, 6))
+sns.barplot(x=ventas_resumidas.index, y=ventas_resumidas.values, palette="Blues", hue=None)
+plt.title(f"Ventas de {producto_interes} en los primeros 4 meses")
+plt.xlabel("Mes")
+plt.ylabel("Cantidad de ventas")
+plt.show();
+
+# Gráfico de línea para ventas por mes y año
+plt.figure(figsize=(12, 6))
+sns.lineplot(data=ventas_filtradas, x="Mes", y="transaction_qty", hue="Año", marker="o", palette="tab10")
+plt.title(f"Distribución de ventas de {producto_interes} ({categoria_interes}) por mes y año")
+plt.xlabel("Mes")
+plt.ylabel("Cantidad de ventas")
+plt.legend(title="Año")
+plt.show();
+
+# Seleccionar las características para el modelo de árbol de decisión
+X_producto = ventas_filtradas[['Mes', 'Año']]  # Mes y Año
+y_producto = ventas_filtradas['transaction_qty']
+
+# Dividir los datos en conjunto de entrenamiento y prueba
+X_train, X_test, y_train, y_test = train_test_split(X_producto, y_producto, test_size=0.2, random_state=42)
+
+# Entrenar el modelo
+modelo_arbol_producto = DecisionTreeRegressor(max_depth=4, min_samples_split=2, random_state=42)
+modelo_arbol_producto.fit(X_train, y_train)
+
+# Definir meses futuros para realizar predicciones (meses 5 a 8)
+meses_futuros = pd.DataFrame({
+    'Mes': [5, 6, 7, 8],  # Meses futuros
+    'Año': [2024] * 4  # Años futuros
+})
+
+# Realizar predicciones para los meses futuros
+ventas_futuras = modelo_arbol_producto.predict(meses_futuros)
+
+# Mostrar las predicciones para los próximos meses
+print(f"Predicciones de ventas para {producto_interes} ({categoria_interes}) en los próximos meses de 2024:")
+for mes, prediccion in zip(meses_futuros['Mes'], ventas_futuras):
+    print(f"Mes {mes}: {prediccion:.2f} unidades")
+
+# Crear un DataFrame para combinar ventas reales y predicciones
+meses_hist = list(ventas_resumidas.index)
+ventas_hist = list(ventas_resumidas.values)
+pred_df = pd.DataFrame({
+    "Mes": meses_hist + list(meses_futuros['Mes']),
+    "Cantidad de ventas": ventas_hist + list(ventas_futuras),
+    "Tipo": ["Real"] * len(ventas_hist) + ["Predicción"] * len(ventas_futuras)
+})
+
+# Gráfico de barras con ventas reales y predicciones
+plt.figure(figsize=(10, 6))
+sns.barplot(data=pred_df, x="Mes", y="Cantidad de ventas", hue="Tipo", palette="Set1")
+plt.title(f"Ventas reales y predicciones para {producto_interes} ({categoria_interes})")
+plt.xlabel("Mes")
+plt.ylabel("Cantidad de ventas")
+plt.show();
+
+# Visualizar el árbol de decisión
+plt.figure(figsize=(15, 10))
+plot_tree(modelo_arbol_producto, filled=True, feature_names=['Mes', 'Año'], class_names=True, rounded=True, fontsize=10)
+plt.title(f"Árbol de Decisión para {producto_interes} ({categoria_interes})")
+plt.show();
+
+# Filtrar solo columnas numéricas
+numeric_cols = ventas_producto.select_dtypes(include=['number'])
+
+# Mapa de calor de correlación
+plt.figure(figsize=(10, 6))
+sns.heatmap(numeric_cols.corr(), annot=True, cmap="YlGnBu")
+plt.title("Matriz de correlación entre variables numéricas")
+plt.show();
+
