@@ -8,6 +8,9 @@ import mlxtend.preprocessing
 import numpy
 import warnings
 
+from textblob import TextBlob
+from wordcloud import WordCloud
+
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.tree import plot_tree
 from sklearn.model_selection import train_test_split
@@ -190,3 +193,63 @@ sns.heatmap(numeric_cols.corr(), annot=True, cmap="YlGnBu")
 plt.title("Matriz de correlación entre variables numéricas")
 plt.show();
 
+
+
+
+
+
+# Text Mining - Análisis de Sentimiento
+# Cargar el dataset
+data = pd.read_csv("./dataset/coffee-shop-sales-revenue.csv", delimiter='|')
+
+# Calcular polaridad (sentimiento) de cada descripción
+data['sentiment'] = data['product_detail'].apply(lambda x: TextBlob(x).sentiment.polarity)
+sentiment_counts = data['sentiment'].apply(lambda x: 'Positivo' if x > 0 else ('Negativo' if x < 0 else 'Neutral')).value_counts()
+
+# Graficar
+plt.figure(figsize=(15, 4))
+plt.pie(sentiment_counts, labels=sentiment_counts.index, autopct='%1.1f%%', colors=['lightgreen', 'lightcoral', 'lightgrey'])
+plt.title("Distribución de sentimientos en las descripciones de productos")
+plt.show()
+
+# Calcular polaridad de cada descripción
+data['polarity'] = data['product_detail'].apply(lambda x: TextBlob(x).sentiment.polarity)
+
+# Histograma de polaridad
+plt.figure(figsize=(10, 4))
+sns.histplot(data['polarity'], kde=True, bins=20)
+plt.title('Distribución de la Polaridad del Sentimiento')
+plt.xlabel('Polaridad')
+plt.ylabel('Frecuencia')
+plt.show()
+
+# Calcular subjetividad de cada descripción
+data['subjectivity'] = data['product_detail'].apply(lambda x: TextBlob(x).sentiment.subjectivity)
+
+# Histograma de subjetividad
+plt.figure(figsize=(10, 4))
+sns.histplot(data['subjectivity'], kde=True, bins=20, color="purple")
+plt.title('Distribución de la Subjetividad del Sentimiento')
+plt.xlabel('Subjetividad')
+plt.ylabel('Frecuencia')
+plt.show()
+
+# Filtrar las descripciones con polaridad positiva
+positive_text = ' '.join(data[data['polarity'] > 0]['product_detail'])
+wordcloud_positive = WordCloud(width=800, height=400, background_color='white').generate(positive_text)
+
+plt.figure(figsize=(15, 4))
+plt.imshow(wordcloud_positive, interpolation='bilinear')
+plt.axis('off')
+plt.title('Nube de Palabras - Descripciones Positivas')
+plt.show()
+
+# Filtrar las descripciones con polaridad negativa
+negative_text = ' '.join(data[data['polarity'] < 0]['product_detail'])
+wordcloud_negative = WordCloud(width=800, height=400, background_color='white', colormap='Reds').generate(negative_text)
+
+plt.figure(figsize=(15, 4))
+plt.imshow(wordcloud_negative, interpolation='bilinear')
+plt.axis('off')
+plt.title('Nube de Palabras - Descripciones Negativas')
+plt.show()
