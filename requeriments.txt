@@ -1,0 +1,9 @@
+pandas
+mlxtend
+matplotlib.pyplot
+seaborn
+numpy
+sklearn.tree
+sklearn.model_selection
+warnings
+
