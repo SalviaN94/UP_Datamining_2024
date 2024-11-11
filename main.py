@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import mlxtend.frequent_patterns
 import mlxtend.preprocessing
-import numpy
+import numpy as np
 import warnings
 
 from textblob import TextBlob
@@ -14,6 +14,9 @@ from wordcloud import WordCloud
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.tree import plot_tree
 from sklearn.model_selection import train_test_split
+
+from sklearn.preprocessing import LabelEncoder
+from sklearn.cluster import KMeans
 
 #Segmentación de clientes
 data = pd.read_csv("./dataset/coffee-shop-sales-revenue.csv", delimiter='|')
@@ -253,3 +256,296 @@ plt.imshow(wordcloud_negative, interpolation='bilinear')
 plt.axis('off')
 plt.title('Nube de Palabras - Descripciones Negativas')
 plt.show()
+
+
+#Clustering K-means
+
+#Importar datos
+df = pd.read_csv(r'D:\Lucas\Universidad de Palermo\4° Año\2- Segundo Semestre\Análisis de la Información y la Decisión\TP Data Mining\Dataset\archive\coffee-shop-sales-revenue.csv', delimiter = '|')
+
+df
+
+# Simplificación  del análisis
+    #Convertimos la variable "transaction_time" en "periodo" para separando los horarios en "Mañana", "Tarde" y "Noche"
+
+df_coffe = pd.DataFrame(df)
+
+df_coffe['transaction_time'] = df_coffe['transaction_time'].str.strip().str[:5]
+
+df_coffe['transaction_time'] = pd.to_datetime(df_coffe['transaction_time'], format='%H:%M').dt.time
+
+
+def categorize_time(time):
+    if time >= pd.to_datetime('06:00').time() and time < pd.to_datetime('12:00').time():
+        return 'Mañana'
+    elif time >= pd.to_datetime('12:00').time() and time < pd.to_datetime('18:00').time():
+        return 'Tarde'
+    else:
+        return 'Noche'
+
+    # Aplicamos la función a la columna transaction_time
+df_coffe['periodo'] = df_coffe['transaction_time'].apply(categorize_time)
+
+    # Eliminamos la variable transaction_time
+df_coffe = df_coffe.drop(['transaction_time'], axis=1)
+
+
+    #Convertimos la variable "transaction_date" en "temporada" para separando las estaciones en "Otoño", "Invierno", "Primavera" y "Verano"
+
+df['transaction_date'] = pd.to_datetime(df['transaction_date'])
+
+def get_season(date):
+    if isinstance(date, pd.Timestamp):
+        month = date.month
+        day = date.day
+        
+        # Ajustar las estaciones según el día 21
+        if month == 9 and day >= 21 or month == 10 or month == 11 or (month == 12 and day < 21):
+            return 'Otoño'
+        elif month == 12 and day >= 21 or month == 1 or month == 2 or (month == 3 and day < 21):
+            return 'Invierno'
+        elif month == 3 and day >= 21 or month == 4 or month == 5 or (month == 6 and day < 21):
+            return 'Primavera'
+        elif month == 6 and day >= 21 or month == 7 or month == 8 or (month == 9 and day < 21):
+            return 'Verano'  
+    return None  
+
+    # Creamos la columna "temporada" aplicando la función a la columna "transaction_date"
+df_coffe['temporada'] = df['transaction_date'].apply(get_season)
+
+    # Eliminamos la variable "transaction_date"
+df_coffe = df_coffe.drop(['transaction_date'], axis=1)
+
+
+df_coffe
+
+df_coffe.info()
+
+    #Para realizar el clustering con K-means es necesario que las variables sean numéricas
+
+label_encoders = {}
+for column in df_coffe.select_dtypes(include=['object']).columns:
+    label_encoders[column] = LabelEncoder()
+    df_coffe[column] = label_encoders[column].fit_transform(df_coffe[column])
+
+df_coffe[df_coffe['transaction_id']==149456]
+df_coffe = df_coffe.drop(['transaction_id', 'store_id', 'product_id'], axis=1)
+df_coffe
+
+
+#Normalizamos los valores
+
+df_coffe.describe()
+df_coffe_norm = df_coffe.copy()
+df_coffe_norm = (df_coffe-df_coffe.min())/(df_coffe.max()-df_coffe.min())
+
+df_coffe_norm.describe()
+
+    #Todos los valores mínmos son igual a cero y todos los valores máximos son igual a 1
+
+#Búsqueda de la cantidad óptima de clusters
+
+    #Calcularemos el "Codo de Jambú" para determinar el número óptimo de clusters según que tan similares son los elementos dentro de cada uno
+
+wcas = []
+
+for i in range(1,11):
+    kmeans = KMeans(n_clusters = i, max_iter = 300)
+    kmeans.fit(df_coffe_norm) #Aplico K-means al dataset
+    wcas.append(kmeans.inertia_)
+
+plt.plot(range(1,11),wcas)
+plt.title("Codo de Jambú")
+plt.xlabel("Número de Clusters")
+plt.ylabel("WCSS") #WCSS es un indicador de qué tan similares son los elementos dentro de los clusters
+plt.show
+
+def optimise_k_means(data,max_k):
+    means = []
+    inertias = []
+    
+    for k in range(1, max_k):
+        kmeans = KMeans(n_clusters=k)
+        kmeans.fit(data)
+        
+        means.append(k)
+        inertias.append(kmeans.inertia_)
+        
+    fig = plt.subplots(figsize=(10,5))
+    plt.plot(means, inertias, 'o-')
+    plt.xlabel('Número de Clusters')
+    plt.ylabel('WCSS')
+    plt.grid(True)
+    plt.show()
+
+optimise_k_means(df_coffe_norm,10)
+
+    #WCSS es la suma de las distancias cuadradas de cada punto al centroide de su cluster. Cuanto más bajo sea su valor, los elementos dentro de cada cluster están más cerca del centroide, lo que significa una mayor similitud entre ellos
+    #La cantidad óptima de clusters se determina cuando se observa una disminución drástica del WCSS. A partir de cinco clústers, la disminución del WCSS se vuelve menos pronunciada en comparación con las etapas anteriores
+    #La cantidad de cluster a utilizar será cinco
+
+#Aplicación del método Clustering K-Means al dataset de Maven Coffe
+
+clustering = KMeans(n_clusters = 5, max_iter = 300) #Crea el modelo
+clustering.fit(df_coffe_norm) #Aplica el modelo al dataset
+
+KMeans(algorithm='auto',copy_x=True,init='k-means++',max_iter=300, n_clusters=5,n_init=10,n_jobs=None,precompute_distances='auto',random_state=None,tol=0.0001,verbose=0)
+
+df_coffe_norm['KMeans_Clusters'] = clustering.labels_  # Agregamos la clasificación de cada elemento según el cluster al que pertenece
+df_coffe_norm.head()
+
+    #Visualización de los clusters
+        #Se aplica el Análisis de Componentes Principales (PCA) para reducir la dimensionalidad y agrupar las características en la visualización
+
+from sklearn.decomposition import PCA
+
+pca = PCA(n_components=2)
+pca_coffe = pca.fit_transform(df_coffe_norm)
+pca_df_coffe = pd.DataFrame(data = pca_coffe, columns = ['Componente_1', 'Componente_2'])
+pca_df_coffe = pd.concat([pca_df_coffe,df_coffe_norm[['KMeans_Clusters']]], axis=1)
+
+pca_df_coffe
+
+fig = plt.figure(figsize=(6,6))
+
+ax = fig.add_subplot(1,1,1)
+ax.set_xlabel('Componente 1', fontsize=15)
+ax.set_ylabel('Componente 2', fontsize=15)
+ax.set_title('Componentes Principales', fontsize=20)
+
+color_theme = np.array(["blue", "green", "orange","red","purple"])
+# Reducimos la opacidad y el tamaño de los puntos
+ax.scatter(x=pca_df_coffe.Componente_1, y=pca_df_coffe.Componente_2, 
+           c=color_theme[pca_df_coffe.KMeans_Clusters], s=20, alpha=0.5)
+
+plt.show()
+
+
+#Interpretación de los resultados
+# Mapeo de valores numéricos a texto
+mapeo_periodo = {
+    0: 'Mañana',
+    2.0: 'Tarde',
+    1.0: 'Noche'
+}
+
+mapeo_temporada = {
+    0: 'Invierno',
+    1: 'Primavera',
+    2: 'Verano',
+    3: 'Otoño'
+}
+
+# Revertir la conversión usando el diccionario
+df_coffe['periodo'] = df_coffe['periodo'].map(mapeo_periodo)
+df_coffe['temporada'] = df_coffe['temporada'].map(mapeo_temporada)
+
+
+df['periodo'] = df_coffe['periodo'] #agregamos al DataFrame original las columnas "periodo", "temporada" y "KMeans_Clusters"
+df['temporada'] = df_coffe['temporada']
+df['KMeans_Clusters'] = df_coffe_norm['KMeans_Clusters'] 
+
+df
+
+cluster_0 = df[df['KMeans_Clusters'] == 0]
+cluster_1 = df[df['KMeans_Clusters'] == 1]
+cluster_2 = df[df['KMeans_Clusters'] == 2]
+cluster_3 = df[df['KMeans_Clusters'] == 3]
+cluster_4 = df[df['KMeans_Clusters'] == 4]
+
+    #Cluster 0
+cluster_0
+
+    #Cluster 1
+cluster_1
+
+    #Cluster 2
+cluster_2
+
+    #Cluster 3
+cluster_3
+
+    #Cluster 4
+cluster_4
+
+
+    #Resumen
+
+cluster_summary = df.groupby('KMeans_Clusters').agg({
+    'store_location': lambda x: x.value_counts().index[0],  # Ubicación más común
+    'periodo': lambda x: x.value_counts().index[0],         # Hora más común
+    'temporada': lambda x: x.value_counts().index[0],# Temporada más común
+    'product_category': lambda x: x.value_counts().index[0],# Categoría más común
+    'transaction_id': 'count'                               # Cantidad de transacciones
+})
+
+print(cluster_summary)
+
+    #Gráfico de barras de transacciones por localidad de cada cluster
+plt.figure(figsize=(12, 6))
+sns.countplot(data=df, x='KMeans_Clusters', hue='store_location')
+plt.title("Distribución de ubicaciones por cluster")
+plt.show()
+
+    #Gráfico de barras de transacciones por periodo de cada cluster
+plt.figure(figsize=(12, 6))
+sns.countplot(data=df, x='KMeans_Clusters', hue='periodo')
+plt.title("Distribución de periodos por cluster")
+plt.show()
+
+
+    #Gráfico de barras de transacciones por temporada de cada cluster
+plt.figure(figsize=(12, 6))
+sns.countplot(data=df, x='KMeans_Clusters', hue='temporada')
+plt.title("Distribución de temporadas por cluster")
+plt.show()
+
+
+    #Gráfico de barras de transacciones por categoría de cada cluster
+plt.figure(figsize=(12, 6))
+sns.countplot(data=df, x='KMeans_Clusters', hue='product_category')
+plt.title("Distribución de categorías por cluster")
+plt.show()
+
+
+    #Insights
+
+        #Grupo A
+            #- Suelen concurrir a las tres localidades, pero sobre todo a Lower Manhattan
+            #- Suelen ir a la mañana y poco a la noche
+            #- Tienen concurrencia todo el año, pero mayormente en primavera
+            #- Consumen mucho té y un poco de chocolate
+
+
+        #Grupo B
+            #- Concurren principalmente a la localidad de Lower Manhattan, pero también a Hell’s Kitchen. No van a Astoria
+            #- Suelen ir principalmente a la mañana y un poco a la noche
+            #- Tienen concurrencia todo el año, pero mayormente en primavera
+            #- Consumen mucho café y también bastante bakery, chocolatada y flavours
+
+        #Grupo C
+            #- Suelen concurrir a las tres localidades, pero sobre todo a Hell’s Kitchen
+            #- Suelen ir a la tarde y cada tanto a la noche. No van a la mañana
+            #- Tienen concurrencia todo el año, pero mayormente en primavera
+            #- Consumen mucho café, bastante bakery y chocolatada
+
+        #Grupo D
+            #- Concurren principalmente a la localidad de Astoria, cada tanto van a Hell’s Kitchen. No van a Lower Manhattan
+            #- Suelen ir principalmente a la mañana y cada tanto a la noche. No van a la tarde
+            #- Tienen concurrencia todo el año, pero mayormente en primavera
+            #- Consumen mucho café, bastante bakery y cada tanto chocolatada
+
+        #Grupo E
+            #- Suelen concurrir a las tres localidades, pero sobre todo a Astoria
+            #- Suelen ir principalmente a la tarde y cada tanto a la noche
+            #- Tienen concurrencia todo el año, pero mayormente en primavera
+            #- Consumen mucho té y un poco de chocolate
+
+
+    #Observaciones Generales
+        #- El grupo B no va a Astoria y el grupo D no va a Lower Manhattan. El resto suele ir a las tres localidades
+        #- Los grupos A, B y D suelen ir mucho a la mañana, cada tanto a la noche y no van a la tarde. En cambio, los grupos C y E van mucho a la tarde, cada tanto a la noche y no van a la mañana
+        #- En todos los grupos se tiene más concurrencia en primavera, le sigue invierno y luego verano
+        #- A nivel general, se suele consumir café, té, bakery, chocolatada y flavours
+        
+
