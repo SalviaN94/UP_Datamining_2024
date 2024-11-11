@@ -261,7 +261,7 @@ plt.show()
 #Clustering K-means
 
 #Importar datos
-df = pd.read_csv(r'D:\Lucas\Universidad de Palermo\4° Año\2- Segundo Semestre\Análisis de la Información y la Decisión\TP Data Mining\Dataset\archive\coffee-shop-sales-revenue.csv', delimiter = '|')
+df = pd.read_csv("./dataset/coffee-shop-sales-revenue.csv", delimiter = '|')
 
 df
 
